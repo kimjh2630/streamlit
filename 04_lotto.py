@@ -12,7 +12,7 @@ def generate_lotto():
     return lotto
 
 #제목 설정
-st.title(":sparkles: 로또 생성기 :sparkles:")
+st.title(":sparkles: 로또 진짜 생성기 :sparkles:")
 
 my_button = st.button("로또를 생성해주세요.")
 
