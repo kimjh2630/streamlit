@@ -187,7 +187,6 @@ with off_chart:
     plt.xticks(rotation =45)
     st.pyplot(fig6)
 
-
 st.divider()
 
 #데이터프레임 표시
