@@ -1,93 +1,300 @@
-import streamlit as st
-import mysql.connector
-import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
+
+import datetime
+import time
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.express as px
 import seaborn as sns
+import streamlit as st
 
-st.set_page_config(page_title="온라인 데이터 분석", page_icon="🌐")
+#초기 설정
+st.set_page_config(layout = "wide")
+plt.rcParams["font.family"] = "Malgun Gothic"
+plt.rcParams["axes.unicode_minus"] = False
 
-#한글 폰트 설정 (맑은 고딕 적용)
-plt.rc("font", family = "Malgun Gothic")
+#CSV 파일 경로
+CSV_FILE_PATH = "https://raw.githubusercontent.com/jjjjunn/YH_project/refs/heads/main/recycling_online.csv"
 
-st.title("🌐 온라인 데이터 분석")
+#색상 팔레트 설정
+palette = px.colors.qualitative.Set2
 
-# ✅ MySQL 데이터 로드 함수
-def load_data(query):
-    secrets = st.secrets["mysql"]
-    conn = mysql.connector.connect(
-        host=secrets["host"],
-        database=secrets["database"],
-        user=secrets["user"],
-        password=secrets["password"]
-    )
-    df = pd.read_sql(query, conn)
-    conn.close()
-    return df
+#데이터 로딩 함수
+@st.cache_data
+def load_data():
+    try:
+        df = pd.read_csv(CSV_FILE_PATH, encoding = "UTF8").fillna(0)
+        df.replace([np.inf, -np.inf], np.nan, inplace = True)
+        df.fillna(0, inplace = True)
 
-# ✅ 데이터 로드
-df_on = load_data("SELECT * FROM ontbl;")
-df_on['날짜'] = pd.to_datetime(df_on['날짜'])
-df_on['year'] = df_on['날짜'].dt.year
-df_on['month'] = df_on['날짜'].dt.month
+        df = df.rename(
+            columns = {
+                "날짜" : "DATE",
+                "디바이스" : "Device",
+                "유입경로" : "Route",
+                "키워드" : "KeyWord",
+                "노출수" : "Exposure",
+                "유입수" : "Inflow",
+                "유입률(%)" : "In_rate",
+                "체류시간(min)" : "Stay_min",
+                "평균체류시간(min)" : "M_Stay_min",
+                "페이지뷰" : "P_view",
+                "평균페이지뷰" : "M_P_view",
+                "이탈수" : "Exit",
+                "이탈률(%)" : "Exit_R",
+                "회원가입" : "Join",
+                "전환율(가입)" : "Join_R",
+                "앱 다운" : "Down",
+                "전환율(앱)" : "Down_R",
+                "구독" : "Scribe",
+                "전환율(구독)" : "Scr_R",
+                "전환수" : "Action",
+                "전환율(%)" : "Act_R",
+            }
+        )
 
-select_year = st.sidebar.radio(
-    "2023년과 2024년 중 선택하세요",
-    df_on['year'].unique()
+        df["DATE"] = pd.to_datetime(df["DATE"], errors = "coerce")
+        df = df.dropna(subset = ["DATE"])
+
+        df["WEEKDAY"] = df["DATE"].dt.day_of_week
+        week_mapping = {0 : "월", 1 : "화", 2 : "수", 3 : "목", 4 : "금", 5 : "토", 6 : "일"}
+        df["WEEKDAY"] = df["WEEKDAY"].map(week_mapping)
+
+        return df
+
+    except Exception as e:
+        st.error(f"CSV 파일 로딩 중 오류 발생: {e}")
+        return pd.DataFrame()
+
+#필터링 함수
+@st.cache_data
+def filter_data(df, start_date, end_date, selected_day, selected_dv):
+    df_filtered = df[(df["DATE"] >= start_date) & (df["DATE"] <= end_date)]
+    if selected_day and "All" not in selected_day:
+        df_filtered = df_filtered[df_filtered["WEEKDAY"].isin(selected_day)]
+    if "All_DV" not in selected_dv:
+        df_filtered = df_filtered[df_filtered["Device"].isin(selected_dv)]
+    return df_filtered
+
+#시각화 함수들
+def barplot(df, x, y):
+    if not df.empty:
+        df_grouped = df.groupby(x)[y].mean().reset_index()
+        fig = px.bar(
+            df_grouped,
+            x = x,
+            y = y,
+            color = x,
+            color_discrete_sequence = palette,
+            title = "디바이스별 평균 유입수 비교",
+            text_auto = True,
+            hover_data = [y],
+        )
+        fig.update_layout(legend_title_text = x)
+        st.plotly_chart(fig, use_container_width = True)
+    else:
+        st.warning("조회된 데이터가 없습니다.")
+
+def baxplot(df, x, y):
+    if not df.empty:
+        fig = px.box(
+            df,
+            x = x,
+            y = y,
+            title = "유입채널별 전환 분포",
+            points = "outliers",
+            color = x,
+            color_discrete_sequence = palette,
+            hover_data = [x, y],
+        )
+        fig.update_layout(legend_title_text = x)
+        st.plotly_chart(fig, use_container_width = True)
+    else:
+        st.warning("조회된 데이터가 없습니다.")
+
+def linechart(df, x, y):
+    if not df.empty:
+        df_grouped = df.groupby(x)[y].mean().reset_index()
+        fig = px.line(
+            df_grouped,
+            x = x,
+            y = y,
+            markers = True,
+            color_discrete_sequence = palette,
+            title = "날짜별 평균 유입률 비교",
+            hover_data = [y],
+        )
+        st.plotly_chart(fig, use_container_width = True)
+    else:
+        st.warning("조회된 데이터가 없습니다.")
+
+def scatterplot(df, x, y):
+    if not df.empty:
+        fig = px.scatter(
+            df,
+            x = x,
+            y = y,
+            color = x,
+            color_discrete_sequence = palette,
+            title = "유입-전환 상관관계",
+            hover_data = [x, y],
+        )
+        fig.update_layout(legend_title_text = x)
+        st.plotly_chart(fig, use_container_width = True)
+    else:
+        st.warning("조회된 데이터가 없습니다.")
+
+def piechart(df, x, y):
+    if not df.empty:
+        if x not in df.columns or y not in df.columns:
+            st.error(f"⚠️ 컬럼 '{x}' 또는 '{y}'가 존재하지 않습니다.")
+            return
+        df_grouped = df.groupby(x)[y].sum().reset_index()
+        fig = px.pie(
+            df_grouped,
+            names = x,
+            values = y,
+            title = "유입채널별 전환율 비교",
+            hole = 0.3,
+            color = x,
+            color_discrete_sequence = palette,
+            hover_data = [y],
+        )
+        fig.update_layout(legend_title_text = x, width = 900, height = 700)
+        st.plotly_chart(fig, use_container_width = True)
+    else:
+        st.warning("⚠️ 선택한 조건에 해당하는 데이터가 없습니다.")
+
+#시작 로딩
+with st.spinner("자동 데이터 로딩 중..."):
+    time.sleep(1)
+df = load_data()
+st.success("데이터 로딩 완료!")
+
+if df.empty:
+    st.stop()
+
+#날짜 설정
+period_q1 = df["DATE"].quantile(0.25)
+period_q3 = df["DATE"].quantile(0.75)
+start_date = df["DATE"].min()
+end_date = df["DATE"].max()
+
+#사이드바
+st.sidebar.header("데이터 조회 옵션 선택")
+start_date_input = st.sidebar.date_input(
+    "시작날짜", value = period_q1, min_value = start_date, max_value = end_date
 )
-select_month = st.sidebar.radio(
-    "1월 ~ 12월에서 선택하세요",
-    df_on['month'].unique()
+end_date_input = st.sidebar.date_input(
+    "종료날짜", value = period_q3, min_value = start_date, max_value = end_date
+)
+start_date_input = pd.to_datetime(start_date_input)
+end_date_input = pd.to_datetime(end_date_input)
+
+wdays_options = ["All"] + df["WEEKDAY"].unique().tolist()
+selected_day_w = st.sidebar.multiselect(
+    "요일 선택", options = wdays_options, default = ["All"]
+)
+dv_options = ["All_DV"] + df["Device"].unique().tolist()
+selected_dv = st.sidebar.multiselect(
+    "디바이스 선택", options = dv_options, default = ["All_DV"]
 )
 
-df_on_date = df_on[(df_on['year'] == select_year) & (df_on['month'] == select_month)]
-data = {
-    "유입경로": ["직접 유입", "키워드 검색", "블로그", "인스타그램", "유튜브", "배너 광고", "트위터 X", "기타 SNS"],
-    "유입수": [55, 80, 6, 9, 93, 88, 0, 62]
-}
-device_counts = df_on_date["디바이스"].value_counts()
+#필터링
+df_select = filter_data(
+    df, start_date_input, end_date_input, selected_day_w, selected_dv
+)
+columns_to_display = [
+    "DATE",
+    "WEEKDAY",
+    "Device",
+    "Route",
+    "KeyWord",
+    "Exposure",
+    "Inflow",
+    "In_rate",
+    "Stay_min",
+    "M_Stay_min",
+    "P_view",
+    "M_P_view",
+    "Exit",
+    "Exit_R",
+    "Join",
+    "Join_R",
+    "Down",
+    "Down_R",
+    "Scribe",
+    "Scr_R",
+    "Action",
+    "Act_R",
+]
+filtered_selected_df = df_select[columns_to_display]
 
-#📌유입 경로별 유입자 수 (막대그래프)
-st.subheader(":bar_chart: 유입 경로별 유입자 수")
-fig1, ax1 = plt.subplots(figsize = (11, 5))
-sns.barplot(
-    x = '유입경로',
-    y = '유입수',
-    data = df_on_date,
-    palette = "pastel",
-    ax = ax1,
-    err_kws = {'linewidth' : 0}     #에러바 제거
+#탭 생성
+tab1, tab2, tab3 = st.tabs(["데이터(지표)", "분석", "예측"])
+
+#탭1 : 지표
+with tab1:
+    if st.sidebar.button("데이터 조회"):
+        if not filtered_selected_df.empty:
+            st.dataframe(filtered_selected_df, use_container_width = True)
+            total_exposure = int(filtered_selected_df["Exposure"].sum())
+            total_in = int(filtered_selected_df["Inflow"].sum())
+            in_ratio = (total_in / total_exposure * 100) if total_exposure > 0 else 0
+            total_stay = int(filtered_selected_df["Stay_min"].sum())
+            total_exit = int(filtered_selected_df["Exit"].sum())
+            exit_ratio = (total_exit / total_in * 100) if total_in > 0 else 0
+            total_act = int(filtered_selected_df["Action"].sum())
+            act_ratio = (total_act / total_in * 100) if total_in > 0 else 0
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
+            c1.metric("노출수", f"{total_exposure:,}")
+            c2.metric("유입수", f"{total_in:,}")
+            c3.metric("유입비율", f"{in_ratio:.1f}%")
+            c4.metric("체류시간(분)", f"{total_stay:,.0f}")
+            c5.metric("이탈수", f"{total_exit:,}")
+            c6.metric("이탈률", f"{exit_ratio:.1f}%")
+            c7.metric("전환수", f"{total_act:,}")
+            c8.metric("전환율", f"{act_ratio:.1f}%")
+
+#탭2 : 분석
+with tab2:
+    st.subheader("기본 분석 시각화")
+    barplot(filtered_selected_df, x = "Device", y = "Inflow")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        baxplot(filtered_selected_df, x = "Route", y = "Action")
+    with col2:
+        linechart(filtered_selected_df, x = "DATE", y = "In_rate")
+    scatterplot(filtered_selected_df, x = "Inflow", y = "Action")
+    piechart(filtered_selected_df, x = "Route", y = "Action")
+
+#탭3 : 예측
+with tab3:
+    daily_data = (
+        filtered_selected_df.groupby("DATE").agg({"Inflow" : "sum", "Action" : "sum"}).reset_index()
     )
-ax1.set_title("유입 경로별 유입수 비율", fontsize=9)
-ax1.set_xlabel = ("유입 경로")
-ax1.set_ylabel = ("유입수")
-plt.xticks(rotation =45)
-st.pyplot(fig1)
+    if daily_data.empty:
+        st.warning("조회된 데이터가 없습니다.")
+    else:
+        X = daily_data[["Inflow"]]
+        y = daily_data[["Action"]]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        daily_data["PREDICTED_Action"] = model.predict(X)
+        rmse = np.sqrt(mean_squared_error(y_test, model.predict(X_test)))
+        st.write(f"**예측 RMSE: {rmse:.2f}**")
+        st.write(f"모델이 예측한 전환수와 실제 수치 사이의 평균차가 :blue[{rmse:.2f}]입니다.")
 
-#📌디바이스별 유입 비율 (파이 차트)
-st.subheader(":chart: 디바이스 비율")
-fig3, ax3 = plt.subplots(figsize = (7, 7))
-plt.pie(
-    x = device_counts,
-    labels = device_counts.index,
-    autopct = "%.2f%%",             #백분율 표시
-    colors = sns.color_palette("pastel")
-    )    
-ax3.set_title("디바이스별 유입 비율")
-plt.xticks(rotation = 45)
-st.pyplot(fig3)
-
-#📌체류시간과 전환율의 상관관계 (히트맵)
-st.subheader(":chart: 체류시간 VS 전환율 히트맵")
-fig5, ax5 = plt.subplots(figsize = (9, 6))
-sns.heatmap(
-    df_on_date[["체류시간(min)", "전환율(가입)", "전환율(앱)", "전환율(구독)"]].corr(),
-    annot = True,       #상관계수 표시
-    cmap = "coolwarm",
-    ax = ax5
-    )    
-ax5.set_title("체류시간과 전환율의 상관관계")
-plt.yticks(rotation = 45)
-st.pyplot(fig5)
-
-st.divider()
-st.write("📌 **머신러닝 예측을 원하시면 Prediction 페이지를 이용하세요!**")
+        fig = px.line(
+            daily_data,
+            x = "DATE",
+            y = ["Action", "PREDICTED_Action"],
+            labels = {"value": "전환수"},
+            title = "실제 vs 예측 전환수",
+            markers = True,
+        )
+        st.plotly_chart(fig, use_container_width = True)
