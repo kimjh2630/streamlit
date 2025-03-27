@@ -86,7 +86,8 @@ with on_machine:
             marker = "o",
             ax = ax_ml_on,
             linestyle = "-",
-            label="예측 vs 실제"            
+            label="예측 vs 실제",
+            errorbar = None
         )
         ax_ml_on.grid(visible = True, linestyle = "-", linewidth = 0.5)
         ax_ml_on.set_title("전환율 예측 결과 비교")
