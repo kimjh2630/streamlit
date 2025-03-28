@@ -332,8 +332,8 @@ with tab2:
         
         for campaign, group in campaign_groups:
             #캠페인 전후 가입자 수 계산
-            pre_signups = group['after_ev'].sum()       #이벤트 후 가입자 수
-            post_signups = group['before_ev'].sum()     #이벤트 전 가입자 수
+            pre_signups = (group['before_ev'] == 0).sum()  #캠페인 전 가입자 수 (0의 수)
+            post_signups = (group['after_ev'] == 0).sum()  #캠페인 후 가입자 수 (0의 수)
             
             #가입 증가율 계산 (0으로 나누는 경우 처리)
             if pre_signups > 0:

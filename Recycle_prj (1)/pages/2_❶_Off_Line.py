@@ -125,6 +125,7 @@ def linechart(df, x, y):
     else:
         st.warning("조회된 데이터가 없습니다.")
 
+#산점도(방문자수 참여자수 상관관계)
 def scatterplot(df, x, y):
     if not df.empty:
         fig = px.scatter(
@@ -141,6 +142,7 @@ def scatterplot(df, x, y):
     else:
         st.warning("조회된 데이터가 없습니다.")
 
+#파이차트(캠페인별 참여율 비교)
 def piechart(df, x, y):
     if not df.empty:
         if x not in df.columns or y not in df.columns:
@@ -203,15 +205,9 @@ df_select = filter_data(
     df, start_date_input, end_date_input, selected_day_w, selected_city
 )
 columns_to_display = [
-    "DATE",
-    "CITY",
-    "VISITORS",
-    "age",
-    "gender",
-    "CAMP",
-    "PART",
-    "P_Ratio",
-    "WEEKDAY",
+    "DATE", "CITY", "VISITORS",
+    "age", "gender", "CAMP",
+    "PART", "P_Ratio", "WEEKDAY",
 ]
 filtered_selected_df = df_select[columns_to_display]
 
