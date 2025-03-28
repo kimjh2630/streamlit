@@ -1,9 +1,9 @@
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, f1_score, roc_curve, auc
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier, RandomForestRegressor
+from sklearn.metrics import accuracy_score, auc, confusion_matrix, f1_score, precision_score, recall_score, roc_curve
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler 
 
 import folium
 import time  
@@ -14,6 +14,7 @@ import plotly.express as px
 import plotly.graph_objs as go
 import seaborn as sns
 import streamlit as st
+import xgboost as xgb
 
 #[파스텔톤 Hex Codes]
 #파스텔 블루 : #ADD8E6
@@ -616,8 +617,8 @@ with tab4:
         #결측값 처리
         y_train.fillna(y_train.median(), inplace = True)
 
-        #랜덤 포레스트 회귀 모델 생성 및 학습
-        on_model = RandomForestRegressor(n_estimators = 50, max_depth = 10, random_state = 42, n_jobs = -1)
+        #Gradient Boosting Regressor 모델 생성 및 학습
+        on_model = GradientBoostingRegressor(n_estimators = 100, learning_rate = 0.1, max_depth = 5, random_state = 42)
         on_model.fit(X_train, y_train)
 
         #테스트 데이터 예측
@@ -700,8 +701,8 @@ with tab5:
     if st.button("오프라인 방문자 수 예측"):        #향후 12개월간의 방문자 수 예측
         #데이터 분할(학습 데이터 : 80%, 테스트 데이터 : 20%)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
-        #랜덤 포레스트 회귀 모델 생성 및 학습
-        off_model = RandomForestRegressor(n_estimators = 100, random_state = 42, n_jobs = -1)
+        #XGBoost Regressor 모델 생성 및 학습
+        off_model = xgb.XGBRegressor(n_estimators = 100, learning_rate = 0.05, max_depth=5, random_state=42)
         off_model.fit(X_train, y_train)
 
         #최대 날짜의 다음 달부터 12개월 간의 날짜 생성
